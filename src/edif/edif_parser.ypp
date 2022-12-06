@@ -1,0 +1,678 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2022 Arnaud Caron <arn4ud@gmail.com>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+%require "3.2"
+%skeleton "lalr1.cc"
+%code requires {
+#include "edif_reader.h"
+
+namespace edif {
+
+class EdifLexer;
+class EdifReader;
+
+}  // namespace edif
+}
+
+%{
+#include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <tuple>
+#include <utility>
+  
+#include "edif_lexer.h"
+#include "edif_reader.h"
+
+#undef yylex
+#define yylex lexer.get_token
+%}
+
+%debug 
+%defines 
+
+%define api.namespace { edif }
+%define api.parser.class { EdifParser }
+
+%define parse.assert
+%define parse.error verbose
+%define api.token.constructor
+%define api.value.type variant
+
+%parse-param { EdifLexer& lexer }
+%parse-param { EdifReader& reader }
+
+%token END_OF_FILE 0 "end of file"
+
+%token LPAREN "("
+%token RPAREN ")"
+
+%token ARRAY "array"
+%token AUTHOR "author"
+%token BOOLEAN "boolean"
+%token CELL "cell"
+%token CELLREF "cellref"
+%token CELLTYPE "celltype"
+%token COMMENT "comment"
+%token CONTENTS "contents"
+%token DESIGN "design"
+%token DIRECTION "direction"
+%token E "e"
+%token EDIF "edif"
+%token EDIFLEVEL "ediflevel"
+%token EDIFVERSION "edifversion"
+%token EXTERNAL "external"
+%token FALSE "false"
+%token GENERIC "generic"
+%token GLOBALPORTREF "globalportref"
+%token INOUT "inout"
+%token INPUT "input"
+%token INSTANCE "instance"
+%token INSTANCEREF "instanceref"
+%token INTEGER "integer"
+%token INTERFACE "interface"
+%token JOINED "joined"
+%token KEYWORDLEVEL "keywordlevel"
+%token KEYWORDMAP "keywordmap"
+%token LIBRARY "library"
+%token LIBRARYREF "libraryref"
+%token LISTOFNETS "listofnets"
+%token LISTOFPORTS "listofports"
+%token MEMBER "member"
+%token NAME "name"
+%token NET "net"
+%token NETBUNDLE "netbundle"
+%token NETLIST "netlist"
+%token NUMBER "number"
+%token NUMBERDEFINITION "numberdefinition"
+%token OUTPUT "output"
+%token PORT "port"
+%token PORTBUNDLE "portbundle"
+%token PORTLIST "portlist"
+%token PORTREF "portref"
+%token PROGRAM "program"
+%token PROPERTY "property"
+%token RENAME "rename"
+%token STATUS "status"
+%token STRING "string"
+%token TECHNOLOGY "technology"
+%token TIMESTAMP "timestamp"
+%token TRUE "true"
+%token VERSION "version"
+%token VIEW "view"
+%token VIEWREF "viewref"
+%token VIEWTYPE "viewtype"
+%token WRITTEN "written"
+
+%token<int64_t> Integer "Integer"
+%token<std::string> String "String"
+%token<std::string> Identifier "Identifier"
+
+%%
+
+%start edif;
+
+array
+    : "(" "array" namedef Integer ")"
+    ;
+
+author
+    : "(" "author" String ")"
+    ;
+
+%nterm<bool> boolean;
+boolean
+    : "(" "boolean" booleanvalue ")" { $$ = $3; }
+    ;
+
+%nterm<bool> booleanvalue;
+booleanvalue
+    : false { $$ = $1; }
+    | true { $$ = $1; }
+    ;
+
+cell
+    : "(" "cell" namedef celltype ..cell_form.. ")"
+    ;
+
+..cell_form..
+    : /* empty */
+    | ..cell_form.. status
+//  | ..cell_form.. viewmap
+    | ..cell_form.. view
+    | ..cell_form.. comment
+    | ..cell_form.. property
+//  | ..cell_form.. userdata
+    ;
+
+.cellref.
+    : /* empty */
+    | cellref
+    ;
+
+cellref
+    : "(" "cellref" nameref .libraryref. ")"
+    ;
+
+celltype
+    : "(" "celltype" "generic" ")"
+    ;
+
+..comment..
+    : /* empty */
+    | ..comment.. comment
+    ;
+
+comment
+    : "(" "comment" ..string.. ")"
+    ;
+
+contents
+    : "(" "contents" ..contents_form.. ")"
+    ;
+
+..contents_form..
+    : /* empty */
+    | ..contents_form.. instance
+//  | ..contents_form.. offpageconnector
+//  | ..contents_form.. figure
+//  | ..contents_form.. section
+    | ..contents_form.. net
+    | ..contents_form.. netbundle
+//  | ..contents_form.. page
+//  | ..contents_form.. commentgraphics
+//  | ..contents_form.. portimplementation
+//  | ..contents_form.. timing
+//  | ..contents_form.. simulate
+//  | ..contents_form.. when
+//  | ..contents_form.. follow
+//  | ..contents_form.. logicport
+//  | ..contents_form.. boundingbox
+    | ..contents_form.. comment
+//  | ..contents_form.. userdata
+    ;
+
+design
+    : "(" "design" namedef cellref ..design_form.. ")"
+    ;
+
+..design_form..
+    : /* empty */
+    | ..design_form.. status
+    | ..design_form.. comment
+    | ..design_form.. property
+//  | ..design_form.. userdata
+    ;
+
+direction
+    : "(" "direction" "input" ")"
+    | "(" "direction" "inout" ")"
+    | "(" "direction" "output" ")"
+    ;
+
+%nterm<double> e;
+e
+    : "(" "e" Integer Integer ")" { $$ = $3 * std::pow(10.0, $4); }
+    ;
+
+edif
+    : "(" "edif" namedef
+          edifversion
+          ediflevel
+          keywordmap
+          ..edif_form.. ")"
+    ;
+
+..edif_form..
+    : /* empty */
+    | ..edif_form.. edif_form
+    ;
+
+edif_form
+    : status
+    | external
+    | library
+    | design
+    | comment
+//  | userdata
+    ;
+
+ediflevel
+    : "(" "ediflevel" Integer ")"
+    ;
+
+edifversion
+    : "(" "edifversion" Integer Integer Integer ")"
+    ;
+
+external
+    : "(" "external" namedef
+           ediflevel
+           technology
+           ..external_form.. ")"
+    ;
+
+..external_form..
+    : /* empty */
+    | ..external_form.. status
+    | ..external_form.. cell
+    | ..external_form.. comment
+//  | ..external_form.. userdata
+    ;
+
+%nterm<bool> false;
+false
+    : "(" "false" ")" { $$ = false; }
+    ;
+
+globalportref
+    : "(" "globalportref" nameref ")"
+    ;
+
+instance
+    : "(" "instance" namedef viewref ..instance_form..  ")"
+//  | "(" "instance" namedef viewlist ..instance_form..  ")"
+    ;
+
+..instance_form..
+    : /* empty */
+//  | ..instance_form.. transform
+//  | ..instance_form.. parameterassign
+//  | ..instance_form.. portinstance
+//  | ..instance_form.. designator
+//  | ..instance_form.. timing
+    | ..instance_form.. comment
+    | ..instance_form.. property
+//  | ..instance_form.. userdata
+    ;
+
+instanceref
+    : "(" "instanceref" nameref ")"
+    | "(" "instanceref" nameref viewref ")"
+    ;
+
+%nterm<int64_t> integer;
+integer
+    : "(" "integer" Integer ")" { $$ = $3; }
+    ;
+
+interface
+    : "(" "interface" ..interface_form.. ")"
+    ;
+
+..interface_form..
+    : /* empty */
+    | ..interface_form.. port 
+    | ..interface_form.. portbundle
+//  | ..interface_form.. symbol
+//  | ..interface_form.. protectionframe
+//  | ..interface_form.. arrayrelatedinfo 
+//  | ..interface_form.. parameter
+    | ..interface_form.. joined
+//  | ..interface_form.. mustjoin 
+//  | ..interface_form.. weakjoined
+//  | ..interface_form.. permutable
+//  | ..interface_form.. timing
+//  | ..interface_form.. designator
+//  | ..interface_form.. simulate
+    | ..interface_form.. comment
+    | ..interface_form.. property
+//  | ..interface_form.. userdata
+    ;
+
+joined
+    : "(" "joined" ..joined_form..  ")"
+    ;
+
+..joined_form..
+    : /* empty */
+    | ..joined_form.. portref
+    | ..joined_form.. portlist
+    | ..joined_form.. globalportref
+    ;
+
+keywordlevel
+    : "(" "keywordlevel" Integer ")"
+    ;
+
+keywordmap
+    : "(" "keywordmap" keywordlevel ..comment.. ")"
+    ;
+
+library
+    : "(" "library" namedef
+            ediflevel
+            technology
+            ..library_form.. ")"
+    ;
+
+..library_form..
+    : /* empty */
+    | ..library_form.. status
+    | ..library_form.. cell
+    | ..library_form.. comment
+//  | ..library_form.. userdata
+    ;
+
+.libraryref.
+    : /* empty */
+    | libraryref
+    ;
+
+libraryref
+    : "(" "libraryref" nameref ")"
+    ;
+
+listofnets
+    : "(" "listofnets" ..net.. ")"
+    ;
+
+listofports
+    : "(" "listofports" ..port.. ")"
+    ;
+    
+member
+    : "(" "member" nameref Integer ")"
+    ;
+
+%nterm<std::string> name;
+name
+    : "(" "name" Identifier ")" { $$ = $3; }
+    ;
+
+%nterm<std::string> namedef;
+namedef
+    : Identifier { $$ = $1; }
+    | name { $$ = $1; }
+    | rename { $$ = $1; }
+    ;
+
+%nterm<std::string> nameref;
+nameref
+    : Identifier { $$ = $1; }
+    | name { $$ = $1; }
+    ;
+
+..net..
+    : /* empty */
+    | ..net.. net
+    ;
+
+net
+    : "(" "net" namedef joined ..net_form.. ")"
+    ;
+
+..net_form..
+    : /* empty */
+//  | ..net_form.. criticality
+//  | ..net_form.. netdelay
+//  | ..net_form.. figure
+//  | ..net_form.. net
+//  | ..net_form.. instance
+//  | ..net_form.. commentgraphics
+    | ..net_form.. comment
+    | ..net_form.. property
+//  | ..net_form.. userdata
+    ;
+
+netbundle
+    : "(" "netbundle" namedef listofnets ..netbundle_form..  ")"
+    ;
+
+..netbundle_form..
+    : /* empty */
+//  | ..netbundle_form.. figure
+//  | ..netbundle_form.. property
+//  | ..netbundle_form.. commentgraphics
+    | ..netbundle_form.. comment
+//  | ..netbundle_form.. userdata
+    ;
+
+%nterm<double> number;
+number
+    : "(" "number" numbervalue ")" { $$ = $3; }
+    ;
+
+numberdefinition
+    : "(" "numberdefinition" ..numberdefinition_form.. ")"
+    ;
+
+..numberdefinition_form..
+    : /* empty */
+//  | ..numberdefinition_form.. scale
+//  | ..numberdefinition_form.. gridmap
+    | ..numberdefinition_form.. comment
+    ;
+
+%nterm<double> numbervalue;
+numbervalue
+    : scaledinteger { $$ = $1; }
+    ;
+
+..port..
+    : /* empty */
+    | ..port.. port
+    | ..port.. portbundle
+    ;
+
+port
+    : "(" "port" portnamedef ..port_form.. ")"
+    ;
+
+..port_form..
+    : /* empty */
+    | ..port_form.. direction
+//  | ..port_form.. unused
+//  | ..port_form.. portdelay
+//  | ..port_form.. designator
+//  | ..port_form.. dcfaninload
+//  | ..port_form.. dcfanoutload
+//  | ..port_form.. dcmaxfanin
+//  | ..port_form.. dcmaxfanout
+//  | ..port_form.. acload
+    | ..port_form.. comment
+    | ..port_form.. property
+//  | ..port_form.. userdata
+    ;
+
+portbundle
+    : "(" "portbundle" portnamedef listofports ..portbundle_form.. ")"
+    ;
+
+..portbundle_form..
+    : /* empty */
+    | ..portbundle_form.. comment
+    | ..portbundle_form.. property
+//  | ..portbundle_form.. userdata
+    ;
+
+portlist
+    : "(" "portlist" ..portref.. ")"
+    ;
+
+portnamedef
+    : namedef
+    | array
+    ;
+
+portnameref
+    : nameref
+    | member
+    ;
+
+..portref..
+    : /* empty */
+    | ..portref.. portref
+    | ..portref.. portnameref
+    ;
+
+portref
+    : "(" "portref" portnameref ")"
+    | "(" "portref" portnameref viewref ")"
+    | "(" "portref" portnameref instanceref ")"
+    ;
+
+program
+    : "(" "program" String .version. ")"
+    ;
+
+property
+    : "(" "property" namedef boolean ..property_form.. ")" {
+    }
+    | "(" "property" namedef integer ..property_form.. ")" {
+    }
+    | "(" "property" namedef number ..property_form.. ")" {
+    }
+    | "(" "property" namedef string ..property_form.. ")" {
+    }
+    ;
+
+..property_form..
+    : /* empty */
+//  | ..property_form.. owner
+//  | ..property_form.. unit
+    | ..property_form.. comment
+//  | ..property_form.. property
+    ;
+
+%nterm<std::string> rename;
+rename
+    : "(" "rename" Identifier String ")" { $$ = $4; }
+    | "(" "rename" name String ")" { $$ = $3; }
+    ;
+
+%nterm<double> scaledinteger;
+scaledinteger
+    : Integer { $$ = $1; }
+    | e { $$ = $1; }
+    ;
+
+status
+    : "(" "status" ..status_form.. ")"
+    ;
+
+..status_form..
+    : /* empty */
+    | ..status_form.. written
+    | ..status_form.. comment
+//  | ..status_form.. userdata
+    ;
+
+..string..
+    : /* empty */
+    | ..string.. String
+    ;
+
+%nterm<std::string> string;
+string
+    : "(" "string" stringvalue ")" { $$ = $3; }
+    ;
+
+%nterm<std::string> stringvalue;
+stringvalue
+    : String { $$ = $1; }
+    ;
+
+technology
+    : "(" "technology" numberdefinition ..technology_form.. ")"
+    ;
+
+..technology_form..
+    : /* empty */
+//  | ..technology_form.. figuregroup
+//  | ..technology_form.. fabricate
+//  | ..technology_form.. simulationinfo
+//  | ..technology_form.. physicaldesignrule
+    | ..technology_form.. comment
+//  | ..technology_form.. userdata
+    ;
+
+timestamp
+    : "(" "timestamp" Integer Integer Integer Integer Integer Integer ")"
+    ;
+
+%nterm<bool> true;
+true
+    : "(" "true" ")" { $$ = true; }
+    ;
+
+.version.
+    : /* empty */
+    | version
+    ;
+
+version
+    : "(" "version" String ")"
+    ;
+
+view
+    : "(" "view" namedef viewtype interface ..view_form.. ")"
+    ;
+
+..view_form..
+    : /* empty */
+    | ..view_form.. status
+    | ..view_form.. contents
+    | ..view_form.. comment
+    | ..view_form.. property
+//  | ..view_form.. userdata
+    ;
+
+viewref
+    : "(" "viewref" nameref  .cellref. ")"
+    ;
+
+viewtype
+    : "(" "viewtype" "netlist" ")"
+//  | "(" "viewtype" "masklayout" ")"
+//  | "(" "viewtype" "pcblayout" ")"
+//  | "(" "viewtype" "schematic" ")"
+//  | "(" "viewtype" "symbolic" ")"
+//  | "(" "viewtype" "behavior" ")"
+//  | "(" "viewtype" "logicmodel" ")"
+//  | "(" "viewtype" "document" ")"
+//  | "(" "viewtype" "graphic" ")"
+//  | "(" "viewtype" "stranger"")"
+    ;
+
+written
+    : "(" "written" timestamp ..written_form.. ")"
+    ;
+
+..written_form..
+    : /* empty */
+    | ..written_form.. author
+    | ..written_form.. program
+//  | ..written_form.. dataorigin
+    | ..written_form.. comment
+    | ..written_form.. property
+//  | ..written_form.. userdata
+    ;
+
+%%
+
+void edif::EdifParser::error(const std::string& msg) {
+    std::cerr << lexer.lineno() << ": error: " << msg  << '\n';
+}

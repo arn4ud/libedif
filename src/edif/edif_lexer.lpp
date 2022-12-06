@@ -1,0 +1,356 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2022 Arnaud Caron <arn4ud@gmail.com>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+%{
+#include <string>
+#include <variant>
+
+#include "edif_lexer.h"
+
+#undef YY_DECL
+#define YY_DECL \
+edif::EdifParser::symbol_type edif::EdifLexer::get_token()
+%}
+
+%option c++
+%option batch
+%option debug
+%option yylineno
+%option case-insensitive
+%option yyclass="edif::EdifLexer"
+
+%option noinput
+%option nounput
+%option nounistd
+%option noyywrap
+%option nodefault
+
+%x KEYWORD
+%x CELLTYPE
+%x VIEWTYPE
+%x DIRECTION
+
+/*
+ * EDIF identifiers consist of alphanumeric or underscore characters and must
+ * be preceded by an ampersand (&) if the first character is not alphabetic.
+ * The ampersand is not considered part of the name. The length of an
+ * identifier is from 1 to 255 characters and case is not significant. Thus
+ * &clock, Clock, and clock all represent the same EDIF name.
+ */
+IDENTIFIER (&[0-9_]|[a-zA-Z])[a-zA-Z0-9_]*
+
+/*
+ * Numbers in EDIF are 32-bit signed integers. Real numbers use a special EDIF
+ * format. For example, the real number 1.4 is represented as (e 14 -1). The e
+ * form requires a mantissa (14) and an exponent (-1). Reals are restricted to
+ * the range $+/-1 \dot 10^{+/-35}$. Numbers in EDIF are dimensionless and
+ * units are determined according to where the number occurs in the file.
+ * Coordinates and line widths are units of distance and must be related to
+ * meters. Each coordinate value is converted to meters by applying a scale
+ * factor. Each EDIF library has a technology section that contains a required
+ * NumberDefinition. The scale keyword is used with the NumberDefinition to
+ * relate EDIF numbers to physical units.
+ */
+INTEGER (\+|\-)?[0-9]+
+
+/*
+ * Valid EDIF strings consist of sequences of ASCII characters enclosed in
+ * double quotes. Any alphanumeric character is allowed as well as any of the
+ * following characters: "!#$&'()*+,-./:;<=>?@[\]^_`{|}~". Special characters,
+ * such as " and % are entered as escape sequences: %number% , where number is
+ * the integer value of the ASCII character. For example, a quote (") is %34%.
+ * Blank and tab characters are also significant when they appear in strings.
+ */
+STRING \"[^\"\n]*\"
+
+%%
+
+<<EOF>> { return edif::EdifParser::make_END_OF_FILE(); }
+
+ /* Blank, tab, line feed, and carriage-return characters (white space) are
+    used as delimiters in EDIF. */
+<*>[ \n\r\t]* { /* skip white spaces */ }
+
+<INITIAL>"(" {
+    BEGIN(KEYWORD);
+    return edif::EdifParser::make_LPAREN();
+}
+<INITIAL>")" {
+    return edif::EdifParser::make_RPAREN();
+}
+<INITIAL>{INTEGER} {
+    return edif::EdifParser::make_Integer(atoi(yytext));
+}
+<INITIAL>{STRING} {
+    return edif::EdifParser::make_String(yytext);
+}
+<INITIAL>{IDENTIFIER} {
+    return edif::EdifParser::make_Identifier(yytext);
+}
+
+<KEYWORD>"array" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_ARRAY();
+}
+<KEYWORD>"author" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_AUTHOR();
+}
+<KEYWORD>"boolean" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_BOOLEAN();
+}
+<KEYWORD>"cell" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_CELL();
+}
+<KEYWORD>"cellref" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_CELLREF();
+}
+<KEYWORD>"celltype" {
+    BEGIN(CELLTYPE);
+    return edif::EdifParser::make_CELLTYPE();
+}
+<KEYWORD>"comment" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_COMMENT();
+}
+<KEYWORD>"contents" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_CONTENTS();
+}
+<KEYWORD>"design" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_DESIGN();
+}
+<KEYWORD>"direction" {
+    BEGIN(DIRECTION);
+    return edif::EdifParser::make_DIRECTION();
+}
+<KEYWORD>"e" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_E();
+}
+<KEYWORD>"edif" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_EDIF();
+}
+<KEYWORD>"ediflevel" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_EDIFLEVEL();
+}
+<KEYWORD>"edifversion" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_EDIFVERSION();
+}
+<KEYWORD>"external" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_EXTERNAL();
+}
+<KEYWORD>"false" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_FALSE();
+}
+<KEYWORD>"globalportref" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_GLOBALPORTREF();
+}
+<KEYWORD>"instance" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_INSTANCE();
+}
+<KEYWORD>"instanceref" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_INSTANCEREF();
+}
+<KEYWORD>"integer" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_INTEGER();
+}
+<KEYWORD>"interface" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_INTERFACE();
+}
+<KEYWORD>"joined" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_JOINED();
+}
+<KEYWORD>"keywordlevel" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_KEYWORDLEVEL();
+}
+<KEYWORD>"keywordmap" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_KEYWORDMAP();
+}
+<KEYWORD>"library" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_LIBRARY();
+}
+<KEYWORD>"libraryref" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_LIBRARYREF();
+}
+<KEYWORD>"listofnets" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_LISTOFNETS();
+}
+<KEYWORD>"listofports" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_LISTOFPORTS();
+}
+<KEYWORD>"member" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_MEMBER();
+}
+<KEYWORD>"name" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_NAME();
+}
+<KEYWORD>"net" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_NET();
+}
+<KEYWORD>"netbundle" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_NETBUNDLE();
+}
+<KEYWORD>"number" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_NUMBER();
+}
+<KEYWORD>"numberdefinition" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_NUMBERDEFINITION();
+}
+<KEYWORD>"port" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_PORT();
+}
+<KEYWORD>"portbundle" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_PORTBUNDLE();
+}
+<KEYWORD>"portlist" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_PORTLIST();
+}
+<KEYWORD>"portref" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_PORTREF();
+}
+<KEYWORD>"program" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_PROGRAM();
+}
+<KEYWORD>"property" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_PROPERTY();
+}
+<KEYWORD>"rename" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_RENAME();
+}
+<KEYWORD>"status" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_STATUS();
+}
+<KEYWORD>"string" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_STRING();
+}
+<KEYWORD>"technology" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_TECHNOLOGY();
+}
+<KEYWORD>"timestamp" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_TIMESTAMP();
+}
+<KEYWORD>"true" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_TRUE();
+}
+<KEYWORD>"version" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_VERSION();
+}
+<KEYWORD>"view" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_VIEW();
+}
+<KEYWORD>"viewref" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_VIEWREF();
+}
+<KEYWORD>"viewtype" {
+    BEGIN(VIEWTYPE);
+    return edif::EdifParser::make_VIEWTYPE();
+}
+<KEYWORD>"written" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_WRITTEN();
+}
+<KEYWORD>. {
+    std::cerr << "Failed to match : " << yytext << '\n';
+}
+
+<CELLTYPE>"generic" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_GENERIC();
+}
+<CELLTYPE>. {
+    std::cerr << "Failed to match : " << yytext << '\n';
+}
+
+<VIEWTYPE>"netlist" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_NETLIST();
+}
+<VIEWTYPE>. {
+    std::cerr << "Failed to match : " << yytext << '\n';
+}
+
+<DIRECTION>"inout" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_INOUT();
+}
+<DIRECTION>"input" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_INPUT();
+}
+<DIRECTION>"output" {
+    BEGIN(INITIAL);
+    return edif::EdifParser::make_OUTPUT();
+}
+<DIRECTION>. {
+    std::cerr << "Failed to match : " << yytext << '\n';
+}
+
+. {  
+    std::cerr << "Failed to match : " << yytext << '\n';
+}
+
+%%
