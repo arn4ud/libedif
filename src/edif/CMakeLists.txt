@@ -65,6 +65,9 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(edif_parser_main edif)
 
-
 add_executable(edif_reader_main edif_reader_main.cpp)
 target_link_libraries(edif_reader_main edif)
+
+add_executable(edif_reader_test edif_reader_test.cpp)
+target_link_libraries(edif_reader_test edif gmock_main)
+add_test(NAME edif_reader_test COMMAND edif_reader_test)
